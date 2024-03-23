@@ -1,0 +1,51 @@
+// ----------------------------------------------------------------------------------------------------------
+// Compute and download VARI data for ABoVE region during summer growing season (Jun-Oct) years 2003 - 2017
+// ----------------------------------------------------------------------------------------------------------
+
+var above_geom = ee.FeatureCollection("users/cjdevine/ABoVE/Shapefiles/Extended_Domain/ABoVE_bb");
+
+// Assign domain geometry to variable
+var above_bb = above_geom;
+
+// Create function to compute VARI using reflectance bands
+var variFun = function(image){
+  var vari = image.expression(
+    '(g - r) / (g + r - b)', {
+      'g' : image.select('Nadir_Reflectance_Band4'), // Green (545-565nm)
+      'r' : image.select('Nadir_Reflectance_Band1'), // Red (620-670nm)
+      'b' : image.select('Nadir_Reflectance_Band3')  // Blue (459-479nm)
+    }).rename('VARI');
+  return(vari);
+};
+
+// Loop through years 2003 through 2017, compute mean VARI for each year's growing season (June through September)
+for (var i = 2003; i < 2017; i++) {
+  var dateStart = i+'-06-01';
+  var dateEnd = i+'-10-01';
+  
+  // Filter MCD43A4.006 image collection by each year's date range
+  var modis = ee.ImageCollection('MODIS/006/MCD43A4').filterDate(dateStart, dateEnd);
+  
+  // Compute VARI for each image band using pre-defined function
+  var VARI = modis.map(variFun);
+  
+  // Reduce all image bands using mean to get average VARI for each year's growing season
+  var VARImean = VARI.reduce(ee.Reducer.mean());
+  print(VARImean, 'Mean VARI '+i);
+  
+  // Clip to bounding box created for ABoVE region and reproject to WGS84 from MODIS sinusoidal projection
+  var VARImean_above = VARImean.clip(above_bb);
+  var VARImean_above_wgs = VARImean_above.reproject('EPSG:4326', null, 1000);
+  
+  // Export to Google Drive folder
+  Export.image.toDrive({
+  image: VARImean_above_wgs,
+  maxPixels: 1.0E13,
+  folder: 'ABoVE_MCD43A4_VARI',
+  description: 'ABoVE_MCD43A4_VARI_Mean_'+i+'-GS',
+  crs: 'EPSG:4326',
+  scale: 500,
+  region: above_bb,
+  fileFormat: 'GeoTIFF'
+  });
+}
