@@ -1,0 +1,46 @@
+// --------------------------------------------------------------------------------------------------------------------
+// Download pre-computed LAI data for ABoVE region during summer growing season (Jun-Oct) years 2003 - 2017
+// --------------------------------------------------------------------------------------------------------------------
+
+var above_geom = ee.FeatureCollection("users/cjdevine/ABoVE/Shapefiles/Extended_Domain/ABoVE_bb");
+
+// Assign domain geometry to variable
+var above_bb = above_geom;
+
+var laiGet = function(image){
+  var lai = image.select('Lai_500m').multiply(0.1).rename('LAI_scaled');
+  return(lai);
+};
+
+// Loop through years 2003 through 2017, extract mean LAI for each year's growing season (June through September)
+for (var i = 2003; i < 2017; i++){
+  
+  var dateStart = i+'-06-01';
+  var dateEnd = i+'-10-01';
+  
+  // Filter MOD13A1.006 image collection by each year's date range for the growing season
+  var modis = ee.ImageCollection('MODIS/006/MOD15A2H').filterDate(dateStart, dateEnd);
+  
+  // Get LAI for each image band using pre-defined function
+  var LAI = modis.map(laiGet);
+  
+  // Reduce all image bands using mean to get average LAI for each year's growing season
+  var LAImean = LAI.reduce(ee.Reducer.mean());
+  print(LAImean, 'Mean LAI '+i);
+  
+  // Clip to bounding box created for ABoVE region and reproject to WGS84 from MODIS sinusoidal projection
+  var LAImean_above = LAImean.clip(above_bb);
+  var LAImean_above_wgs = LAImean_above.reproject('EPSG:4326', null, 1000);
+  
+  // Export LAI to Google Drive folder
+  Export.image.toDrive({
+  image: LAImean_above_wgs,
+  maxPixels: 1.0E13,
+  folder: 'ABoVE_MOD15A2H_LAI',
+  description: 'ABoVE_MOD15A2H_LAI_Mean_'+i+'-GS',
+  crs: 'EPSG:4326',
+  scale: 500,
+  region: above_bb,
+  fileFormat: 'GeoTIFF'
+  });
+}
