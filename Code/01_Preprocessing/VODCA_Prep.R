@@ -104,8 +104,8 @@ for (i in 1 : length(years)){
   dates = as.Date(gsub('_','-',substr(files, start = 1, stop = 11)))
   index = as.numeric(format(dates, format = "%m"))
   
-  # Subset files to growing season
-  files = files[which(index %in% c(6:10))]
+  # Subset files to growing season (JUN-SEP)
+  files = files[which(index %in% c(6:9))]
   
   vod = stack(files)
   
